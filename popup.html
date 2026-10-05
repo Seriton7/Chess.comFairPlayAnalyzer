@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chess.com Fair Play Analyzer</title>
+    <link rel="stylesheet" type="text/css" href="styles.css">
+    <link rel="shortcut icon" href="icon/icon_app.png">
+    <script type="text/javascript" src="chart.min.js"></script>
+    <script type="text/javascript" src="popup.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Chess.com Fair Play Analyzer</h1>
+            <p>Analyze chess.com players for fair play indicators.</p>
+        </div>
+        <div class="input-section">
+            <div class="input-group">
+                <input type="text" id="usernameInput" placeholder="Enter Chess.com username">
+                <button id="analyzeBtn">Analyze</button>
+            </div>
+        </div>
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Analyzing player data...</p>
+            <div class="progress-text" id="progressText"></div>
+        </div>
+        <div id="error" class="error"></div>
+        <div id="results" class="results">
+            <div class="player-card">
+                <div class="player-header">
+                    <img id="playerAvatar" class="avatar" src="" alt="Player Avatar">
+                    <div class="player-info">
+                        <h2 id="playerUsername"></h2>
+                        <div class="player-meta">
+                            <div id="playerCountry"></div>
+                            <div id="playerStatus"></div>
+                            <div id="playerJoined"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="accountAge">-</div>
+                        <div class="stat-label">Account Age</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="lastSeen">-</div>
+                        <div class="stat-label">Last Online</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="followers">-</div>
+                        <div class="stat-label">Followers</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalGames">-</div>
+                        <div class="stat-label">Total Games</div>
+                    </div>
+                </div>
+                <div class="accuracy-grid">
+                    <div class="accuracy-card">
+                        <div class="accuracy-value" id="rapidAccuracy">-%</div>
+                        <div class="accuracy-label">Rapid Accuracy</div>
+                    </div>
+                    <div class="accuracy-card">
+                        <div class="accuracy-value" id="blitzAccuracy">-%</div>
+                        <div class="accuracy-label">Blitz Accuracy</div>
+                    </div>
+                    <div class="accuracy-card">
+                        <div class="accuracy-value" id="bulletAccuracy">-%</div>
+                        <div class="accuracy-label">Bullet Accuracy</div>
+                    </div>
+                </div>
+                <div class="accuracy-note">Accuracy from game archives (last 12 months)</div>
+            </div>
+            <div class="fair-play-score">
+                <div class="score-value" id="fairPlayScore">-%</div>
+                <div class="score-label">Fair Play Score</div>
+            </div>
+            <div class="ratings-section">
+                <h3 style="margin-bottom: 15px; color: #333333;">Current Ratings</h3>
+                <div class="ratings-grid">
+                    <div class="rating-card">
+                        <div class="rating-type">Rapid</div>
+                        <div class="rating-value" id="rapidRating">-</div>
+                        <div class="rating-games" id="rapidGames">- games</div>
+                    </div>
+                    <div class="rating-card">
+                        <div class="rating-type">Blitz</div>
+                        <div class="rating-value" id="blitzRating">-</div>
+                        <div class="rating-games" id="blitzGames">- games</div>
+                    </div>
+                    <div class="rating-card">
+                        <div class="rating-type">Bullet</div>
+                        <div class="rating-value" id="bulletRating">-</div>
+                        <div class="rating-games" id="bulletGames">- games</div>
+                    </div>
+                </div>
+            </div>
+            <div class="charts-section">
+                <h3 style="margin-bottom: 15px; color: #333333;">Win Rate Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="winRateChart"></canvas>
+                </div>
+                <h3 style="margin-bottom: 15px; color: #333333;">Rating Progress</h3>
+                <div class="chart-container">
+                    <canvas id="ratingProgressChart"></canvas>
+                </div>
+            </div>
+            <div class="legend">
+                <h4>Fair Play Score Legend</h4>
+                <div class="legend-item">
+                    <span class="legend-score" style="color: #28A745;">90% - 100%</span>
+                    <span class="legend-desc">Very likely fair</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-score" style="color: #FFC107;">65% - 89%</span>
+                    <span class="legend-desc">Some suspicion</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-score" style="color: #FD7E14;">40% - 64%</span>
+                    <span class="legend-desc">Suspicious behavior</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-score" style="color: #DC3545;">0% - 39%</span>
+                    <span class="legend-desc">Highly suspicious</span>
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Support this project and help improve chess fair play detection:</p>
+            <div class="footer-links">
+                <a href="https://github.com/Seriton7/Chess.comFairPlayAnalyzer" class="footer-link" target="_blank">GitHub</a>
+                <a href="https://buycoffee.to/seriton" class="footer-link" target="_blank">Donate</a>
+            </div>
+            <p style="margin-top: 10px; opacity: 0.4;">The Fair Play score is only an estimate and should not be considered proof that your opponent is cheating.</p>
+            <p><img src="icon/logo.png" alt="Logo" width="80"></p>
+            <p style="opacity: 0.4;">V 1.0.0</p>
+            <p><a href="https://github.com/Seriton7/Chess.comFairPlayAnalyzer/blob/main/PRIVACY_POLICY.md" target="_blank" style="text-decoration: none; color: #FFFFFF;">Privacy Policy</p>
+        </div>
+    </div>
+</body>
+</html>

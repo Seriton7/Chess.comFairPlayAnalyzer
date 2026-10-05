@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Chess.com Fair Play Analyzer",
+  "version": "1.0.0",
+  "description": "Analyze chess.com players for fair play indicators.",
+  "icons":{
+    "128": "icon/icon_app.png"
+  },
+  "action":{
+    "default_icon":{
+      "128": "icon/icon_app.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "host_permissions":[
+    "https://api.chess.com/*",
+    "https://images.chesscomfiles.com/*"
+  ]
+}
