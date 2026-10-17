@@ -238,10 +238,10 @@ class ChessFairPlayAnalyzer{
             statusHTML += '<span class="badge staff">Staff</span> ';
         }
         if (playerData.status && (playerData.status.includes('mod') || playerData.status.includes('moderator'))){
-            statusHTML += '<span class="badge mod">Mod</span> ';
+            statusHTML += '<span class="badge mod">Moderator</span> ';
         }
         if (playerData.is_streamer){
-            statusHTML += '<span class="badge premium">Streamer</span> ';
+            statusHTML += '<span class="badge streamer">Streamer</span> ';
         }
         if (playerData.title){
             statusHTML += `<span class="badge title">${playerData.title}</span> `;
