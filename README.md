@@ -80,9 +80,9 @@ https://chromewebstore.google.com/detail/oobncfbkabmfhdplldpndkediijlkhpg?utm_so
 
 1. Open the extension ;
 <img src="assets/usage1.png" width="200">
-2. Enter the username you want to analyze in the text box, then click the “Analyze” button to start the analysis ;
+2. Enter the username you want to analyze in the text box, then click the "Analyze" button to start the analysis ;
 <img src="assets/usage2.png" width="200">
-3. After completing the steps above, the user’s Fair Play score should be displayed.
+3. After completing the steps above, the user's Fair Play score should be displayed.
 <img src="assets/usage3.png" width="200">
 
 ## How It Works
