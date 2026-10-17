@@ -147,16 +147,16 @@ body{
     text-transform: uppercase;
 }
 .badge.staff{ 
-    background: #FF6B6B; color: white; 
+    background: #305730; color: #FFFFFF; 
 }
 .badge.mod{ 
-    background: #4ECDC4; color: white; 
+    background: #324660; color: #FFFFFF; 
 }
-.badge.premium{ 
-    background: #FFD93D; color: #333333; 
+.badge.streamer{ 
+    background: #5E53D9; color: #FFFFFF; 
 }
 .badge.title{ 
-    background: #95E1D3; color: #333333; 
+    background: #7C2929; color: #FFFFFF; 
 }
 .fair-play-score{
     text-align: center;
