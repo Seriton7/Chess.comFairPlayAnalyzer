@@ -64,7 +64,7 @@ body{
 }
 #analyzeBtn{
     padding: 12px 20px;
-    background: #323232;
+    background: #80B54C;
     color: #FFFFFF;
     border: none;
     border-radius: 10px;
@@ -125,7 +125,7 @@ body{
     width: 60px;
     height: 60px;
     border-radius: 50%;
-    border: 3px solid #535353;
+    border: 3px solid #589046;
     object-fit: cover;
 }
 .player-info h2{
@@ -247,7 +247,7 @@ body{
     transition: all 0.3s ease;
 }
 .rating-card:hover{
-    border-color: #7E7E7E;
+    border-color: #589046;
     transform: translateY(-2px);
 }
 .rating-type{
@@ -284,7 +284,7 @@ body{
     padding: 15px;
     border-radius: 12px;
     margin-bottom: 15px;
-    border-left: 4px solid #C2C2C2;
+    border-left: 4px solid #589046;
     backdrop-filter: blur(10px);
 }
 .legend h4{
