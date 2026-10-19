@@ -1,8 +1,8 @@
 # Privacy Policy
 
-**Last updated:** October 3, 2026
+**Last updated:** October 19, 2026
 
-Chess.com Fair Play Analyzer "The Extension" is a browser extension that analyzes publicly available Chess.com player and game data and provides statistical fair-play indicators.
+Chess.com Fair Play Analyzer "The Extension" is a browser extension that analyzes publicly available Chess.com player and game data and provides statistical fair play indicators.
 
 ## 1. Data Accessed by the Extension
 
@@ -72,8 +72,8 @@ The accuracy of the analysis depends on the amount, availability, and quality of
 
 The Extension uses publicly available resources provided by Chess.com, including:
 
-* Chess.com public API
-* Chess.com-hosted player images
+- Chess.com public API
+- Chess.com-hosted player images
 
 The availability and use of these resources are subject to Chess.com's own terms and policies.
 
