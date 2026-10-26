@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+### V 1.0.1
+
+### Added:
+
+1. Changing GUI colors
+
 ### V 1.0.0
 
 ### Added:
