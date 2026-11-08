@@ -141,6 +141,7 @@ class ChessFairPlayAnalyzer{
         const blitz = [];
         const rapid = [];
         const ratingHistory = { bullet: [], blitz: [], rapid: [] };
+        const gameResults = { bullet: [], blitz: [], rapid: [] };
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
@@ -177,6 +178,15 @@ class ChessFairPlayAnalyzer{
                                 bucket.push({ date, rating: playerSide.rating, timestamp });
                             }
                         }
+                        if (playerSide && game.end_time){
+                            const resultBucket = gameResults[game.time_class];
+                            if (resultBucket){
+                                resultBucket.push({
+                                    timestamp: game.end_time * 1000,
+                                    win: playerSide.result === 'win'
+                                });
+                            }
+                        }
                     });
                 } 
                 catch (e){
@@ -189,6 +199,11 @@ class ChessFairPlayAnalyzer{
         Object.keys(ratingHistory).forEach(key =>{
             ratingHistory[key].sort((a, b) => a.timestamp - b.timestamp);
         });
+        const winStreaks = {};
+        Object.keys(gameResults).forEach(key =>{
+            gameResults[key].sort((a, b) => a.timestamp - b.timestamp);
+            winStreaks[key] = this.calculateLongestWinStreak(gameResults[key]);
+        });
         return{
             bulletAvg: avg(bullet),
             blitzAvg: avg(blitz),
@@ -196,8 +211,23 @@ class ChessFairPlayAnalyzer{
             bulletCount: bullet.length,
             blitzCount: blitz.length,
             rapidCount: rapid.length,
-            ratingHistory
+            ratingHistory,
+            winStreaks
         };
+    }
+
+    calculateLongestWinStreak(results){
+        let longest = 0;
+        let current = 0;
+        results.forEach(r =>{
+            if (r.win){
+                current++;
+                if (current > longest) longest = current;
+            } else{
+                current = 0;
+            }
+        });
+        return longest;
     }
 
     buildDailyRatingSeries(entries){
@@ -213,6 +243,7 @@ class ChessFairPlayAnalyzer{
     async displayResults(playerData, statsData, accuracies){
         this.displayPlayerInfo(playerData);
         this.displayRatings(statsData);
+        this.displayWinStreaks(accuracies.winStreaks);
         this.displayAccuracies(accuracies);
         const fairPlayScore = this.calculateFairPlayScore(playerData, statsData, accuracies);
         this.displayFairPlayScore(fairPlayScore);
@@ -281,6 +312,14 @@ class ChessFairPlayAnalyzer{
             }
         });
         setText('totalGames', totalGames);
+    }
+
+    displayWinStreaks(winStreaks){
+        const names = ['rapid', 'blitz', 'bullet'];
+        names.forEach(name =>{
+            const streak = winStreaks ? winStreaks[name] : 0;
+            setText(`${name}Streak`, streak > 0 ? `${streak} wins` : 'N/A');
+        });
     }
 
     displayAccuracies(accuracies){
