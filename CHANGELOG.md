@@ -2,11 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+### V 1.0.2
+
+### Added:
+
+1. Added GitHub and Chess.com graphics to the footer and removed the old style
+
+<hr>
+
 ### V 1.0.1
 
 ### Added:
 
 1. Changing GUI colors
+
+<hr>
 
 ### V 1.0.0
 
@@ -23,6 +33,8 @@ All notable changes to this project will be documented in this file.
 9. Rating progression charts
 10. Fair Play score based on multiple statistical indicators
 11. Analysis progress and error handling
+
+<hr>
 
 #### Notes:
 
