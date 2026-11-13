@@ -1,6 +1,6 @@
 # <p align="center">Chess.com Fair Play Analyzer</p>
 
-Analyze chess.com players for fair play indicators.
+<p align="center">Analyze chess.com players for fair play indicators.</p>
 
 <p align="center"><img src="assets/icon_app.png" width="150"></p>
 
@@ -10,6 +10,7 @@ Analyze chess.com players for fair play indicators.
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 [![Privacy Policy](https://img.shields.io/badge/Privacy%20Policy-View-purple?style=for-the-badge&logo=fontawesome&logoColor=white)](PRIVACY_POLICY.md)
+![Version](https://img.shields.io/badge/version-1.1.2-red)
 [![License](https://img.shields.io/badge/license-GPLv2-orange.svg)](LICENSE)
 
 <table>
