@@ -47,7 +47,6 @@ body{
 .input-group{
     display: flex;
     gap: 10px;
-    margin-bottom: 15px;
 }
 #usernameInput{
     flex: 1;
@@ -124,8 +123,6 @@ body{
 .avatar{
     width: 60px;
     height: 60px;
-    border-radius: 50%;
-    border: 3px solid #589046;
     object-fit: cover;
 }
 .player-info h2{
@@ -382,7 +379,7 @@ body{
     color: rgba(255, 255, 255, 0.85);
     margin-top: 6px;
 }
-.accuracy-note{
+.note{
     font-size: 10px;
     color: #999999;
     text-align: center;
@@ -391,4 +388,45 @@ body{
 .footer-a{
     text-decoration: none;
     color: #FFFFFF;
+}
+.reasons-section{
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border-left: 4px solid #589046;
+    backdrop-filter: blur(10px);
+}
+.reasons-section h4{
+    color: #333333;
+    margin-bottom: 10px;
+    font-size: 14px;
+}
+.reason-item{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    font-size: 12px;
+}
+.reason-item:last-child{
+    border-bottom: none;
+}
+.reason-label{
+    color: #666666;
+}
+.reason-points{
+    font-weight: 600;
+    color: #DC3545;
+    white-space: nowrap;
+}
+.reason-points.ok{
+    color: #28A745;
+}
+.reason-note{
+    font-size: 10px;
+    color: #999999;
+    margin-top: 8px;
 }

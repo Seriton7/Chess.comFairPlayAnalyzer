@@ -75,6 +75,25 @@ const COUNTRY_NAMES = {
     ZM: 'Zambia', ZW: 'Zimbabwe'
 };
 
+const MODES = ['rapid', 'blitz', 'bullet'];
+const MODE_LABELS = { rapid: 'Rapid', blitz: 'Blitz', bullet: 'Bullet' };
+const ARCHIVE_BATCH_SIZE = 4;
+const ARCHIVE_MONTHS = 12;
+const MIN_ACCURACY_GAMES = 20;
+const MIN_VARIANCE_GAMES = 30;
+const MIN_WINRATE_GAMES = 20;
+const MIN_MODE_GAMES = 30;
+const MIN_STRONG_GAMES = 15;
+const STRONG_OPPONENT_DIFF = 100;
+const HIGH_ACCURACY_LINE = 95;
+const DRAW_RESULTS = ['agreed', 'repetition', 'stalemate', 'insufficient', '50move', 'timevsinsufficient'];
+const ACCURACY_STEPS = {
+    rapid: [[95, 25], [92, 20], [88, 12], [85, 5]],
+    blitz: [[94, 25], [90, 20], [86, 12], [82, 5]],
+    bullet: [[92, 25], [87, 20], [82, 12], [77, 5]]
+};
+const MIN_AVG_FOR_VARIANCE = { rapid: 80, blitz: 80, bullet: 75 };
+
 class ChessFairPlayAnalyzer{
     constructor(){
         this.apiBase = 'https://api.chess.com/pub/player/';
@@ -136,84 +155,137 @@ class ChessFairPlayAnalyzer{
         return await response.json();
     }
 
-    async fetchRealAccuracies(username){
-        const bullet = [];
-        const blitz = [];
-        const rapid = [];
-        const ratingHistory = { bullet: [], blitz: [], rapid: [] };
-        const gameResults = { bullet: [], blitz: [], rapid: [] };
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        for (let year = currentYear; year >= currentYear - 1; year--){
-            for (let month = 12; month >= 1; month--){
-                if (year === currentYear && month > currentMonth) continue;
-                const monthStr = String(month).padStart(2, '0');
-                this.setProgress(`Scanning ${year}-${monthStr}...`);
-                try{
-                    const url = `${this.apiBase}${username}/games/${year}/${monthStr}`;
-                    const response = await fetch(url);
-                    if (!response.ok) continue;
-                    const data = await response.json();
-                    if (!data.games) continue;
-                    data.games.forEach(game =>{
-                        if (!game.rated || game.rules !== 'chess') return;
-                        const isWhite = game.white.username.toLowerCase() === username;
-                        const playerSide = isWhite ? game.white : game.black;
-                        if (game.accuracies){
-                            const accuracy = isWhite ? game.accuracies.white : game.accuracies.black;
-                            if (typeof accuracy === 'number'){
-                                switch (game.time_class){
-                                    case 'bullet': bullet.push(accuracy); break;
-                                    case 'blitz': blitz.push(accuracy); break;
-                                    case 'rapid': rapid.push(accuracy); break;
-                                }
-                            }
-                        }
-                        if (playerSide && typeof playerSide.rating === 'number' && game.end_time){
-                            const bucket = ratingHistory[game.time_class];
-                            if (bucket){
-                                const timestamp = game.end_time * 1000;
-                                const date = new Date(timestamp).toISOString().split('T')[0];
-                                bucket.push({ date, rating: playerSide.rating, timestamp });
-                            }
-                        }
-                        if (playerSide && game.end_time){
-                            const resultBucket = gameResults[game.time_class];
-                            if (resultBucket){
-                                resultBucket.push({
-                                    timestamp: game.end_time * 1000,
-                                    win: playerSide.result === 'win'
-                                });
-                            }
-                        }
-                    });
-                } 
-                catch (e){
+    async fetchArchiveUrls(username){
+        try{
+            const response = await fetch(`${this.apiBase}${username}/games/archives`);
+            if (!response.ok) return [];
+            const data = await response.json();
+            if (!data.archives) return [];
+            const now = new Date();
+            const nowIndex = now.getFullYear() * 12 + now.getMonth();
+            return data.archives.filter(url =>{
+                const match = url.match(/games\/(\d{4})\/(\d{2})$/);
+                if (!match) return false;
+                const monthIndex = parseInt(match[1], 10) * 12 + (parseInt(match[2], 10) - 1);
+                return monthIndex >= nowIndex - (ARCHIVE_MONTHS - 1);
+            });
+        } 
+        catch (e){
+            return [];
+        }
+    }
 
-                    continue;
-                }
+    async fetchArchive(url){
+        try{
+            const response = await fetch(url);
+            if (!response.ok) return [];
+            const data = await response.json();
+            return data.games || [];
+        } 
+        catch (e){
+            return [];
+        }
+    }
+
+    async fetchRealAccuracies(username){
+        const store = {
+            accuracy: { bullet: [], blitz: [], rapid: [] },
+            ratingHistory: { bullet: [], blitz: [], rapid: [] },
+            gameResults: { bullet: [], blitz: [], rapid: [] },
+            strongGames: [],
+            modeRecords: {
+                bullet: { win: 0, loss: 0, draw: 0 },
+                blitz: { win: 0, loss: 0, draw: 0 },
+                rapid: { win: 0, loss: 0, draw: 0 }
             }
+        };
+        const archives = await this.fetchArchiveUrls(username);
+        for (let i = 0; i < archives.length; i += ARCHIVE_BATCH_SIZE){
+            const batch = archives.slice(i, i + ARCHIVE_BATCH_SIZE);
+            this.setProgress(`Scanning archives ${Math.min(i + ARCHIVE_BATCH_SIZE, archives.length)}/${archives.length}...`);
+            const results = await Promise.all(batch.map(url => this.fetchArchive(url)));
+            results.forEach(games =>{
+                games.forEach(game => this.processGame(game, username, store));
+            });
         }
         const avg = (arr) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+        const ratingHistory = store.ratingHistory;
         Object.keys(ratingHistory).forEach(key =>{
             ratingHistory[key].sort((a, b) => a.timestamp - b.timestamp);
         });
         const winStreaks = {};
-        Object.keys(gameResults).forEach(key =>{
-            gameResults[key].sort((a, b) => a.timestamp - b.timestamp);
-            winStreaks[key] = this.calculateLongestWinStreak(gameResults[key]);
+        Object.keys(store.gameResults).forEach(key =>{
+            store.gameResults[key].sort((a, b) => a.timestamp - b.timestamp);
+            winStreaks[key] = this.calculateLongestWinStreak(store.gameResults[key]);
+        });
+        const accuracyStats = {};
+        MODES.forEach(mode =>{
+            const arr = store.accuracy[mode];
+            accuracyStats[mode] = {
+                std: this.standardDeviation(arr),
+                highShare: arr.length ? arr.filter(a => a >= HIGH_ACCURACY_LINE).length / arr.length : 0
+            };
         });
         return{
-            bulletAvg: avg(bullet),
-            blitzAvg: avg(blitz),
-            rapidAvg: avg(rapid),
-            bulletCount: bullet.length,
-            blitzCount: blitz.length,
-            rapidCount: rapid.length,
+            bulletAvg: avg(store.accuracy.bullet),
+            blitzAvg: avg(store.accuracy.blitz),
+            rapidAvg: avg(store.accuracy.rapid),
+            bulletCount: store.accuracy.bullet.length,
+            blitzCount: store.accuracy.blitz.length,
+            rapidCount: store.accuracy.rapid.length,
             ratingHistory,
-            winStreaks
+            winStreaks,
+            accuracyStats,
+            strongGames: store.strongGames,
+            modeRecords: store.modeRecords
         };
+    }
+
+    processGame(game, username, store){
+        if (game.rules !== 'chess') return;
+        const isRated = game.rated === true;
+        const isWhite = game.white.username.toLowerCase() === username;
+        const playerSide = isWhite ? game.white : game.black;
+        const opponentSide = isWhite ? game.black : game.white;
+        const record = store.modeRecords[game.time_class];
+        if (record && playerSide && playerSide.result){
+            if (playerSide.result === 'win') record.win++;
+            else if (DRAW_RESULTS.includes(playerSide.result)) record.draw++;
+            else record.loss++;
+        }
+        let accuracy = null;
+        if (game.accuracies){
+            const acc = isWhite ? game.accuracies.white : game.accuracies.black;
+            if (typeof acc === 'number'){
+                accuracy = acc;
+                if (store.accuracy[game.time_class]) store.accuracy[game.time_class].push(acc);
+            }
+        }
+        if (isRated && playerSide && typeof playerSide.rating === 'number' && game.end_time){
+            const bucket = store.ratingHistory[game.time_class];
+            if (bucket){
+                const timestamp = game.end_time * 1000;
+                const date = new Date(timestamp).toISOString().split('T')[0];
+                bucket.push({ date, rating: playerSide.rating, timestamp });
+            }
+        }
+        if (playerSide && game.end_time){
+            const resultBucket = store.gameResults[game.time_class];
+            if (resultBucket){
+                resultBucket.push({
+                    timestamp: game.end_time * 1000,
+                    win: playerSide.result === 'win'
+                });
+            }
+        }
+        if (isRated && playerSide && opponentSide && typeof playerSide.rating === 'number' && typeof opponentSide.rating === 'number'){
+            if (opponentSide.rating - playerSide.rating >= STRONG_OPPONENT_DIFF){
+                store.strongGames.push({
+                    win: playerSide.result === 'win',
+                    accuracy: accuracy
+                });
+            }
+        }
     }
 
     calculateLongestWinStreak(results){
@@ -240,14 +312,47 @@ class ChessFairPlayAnalyzer{
             .sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 
+    standardDeviation(arr){
+        if (arr.length < 2) return null;
+        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+        const variance = arr.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / arr.length;
+        return Math.sqrt(variance);
+    }
+
+    pickRisk(value, steps){
+        for (const [limit, points] of steps){
+            if (value >= limit) return points;
+        }
+        return 0;
+    }
+
+    calculateRatingJump(series){
+        const windowMs = 30 * 24 * 60 * 60 * 1000;
+        let maxGain = 0;
+        for (let i = 0; i < series.length; i++){
+            const t = new Date(series[i].date).getTime();
+            let minPrev = series[i].rating;
+            for (let j = 0; j < i; j++){
+                const tj = new Date(series[j].date).getTime();
+                if (t - tj <= windowMs && series[j].rating < minPrev) minPrev = series[j].rating;
+            }
+            if (series[i].rating >= 1000){
+                const gain = series[i].rating - minPrev;
+                if (gain > maxGain) maxGain = gain;
+            }
+        }
+        return maxGain;
+    }
+
     async displayResults(playerData, statsData, accuracies){
         this.displayPlayerInfo(playerData);
-        this.displayRatings(statsData);
+        this.displayRatings(statsData, accuracies.modeRecords);
         this.displayWinStreaks(accuracies.winStreaks);
         this.displayAccuracies(accuracies);
-        const fairPlayScore = this.calculateFairPlayScore(playerData, statsData, accuracies);
-        this.displayFairPlayScore(fairPlayScore);
-        this.createWinRateChart(statsData);
+        const fairPlayResult = this.calculateFairPlayScore(playerData, statsData, accuracies);
+        this.displayFairPlayScore(fairPlayResult.score);
+        this.displayReasons(fairPlayResult);
+        this.createWinRateChart(accuracies.modeRecords);
         this.createRatingProgressChart(accuracies.ratingHistory);
         setDisplay('results', 'block');
     }
@@ -293,22 +398,24 @@ class ChessFairPlayAnalyzer{
         setText('followers', playerData.followers || '0');
     }
 
-    displayRatings(statsData){
+    displayRatings(statsData, modeRecords){
         const modes = ['chess_rapid', 'chess_blitz', 'chess_bullet'];
         const displayNames = ['rapid', 'blitz', 'bullet'];
         let totalGames = 0;
         modes.forEach((mode, index) =>{
             const modeData = statsData[mode];
             const displayName = displayNames[index];
+            const record = modeRecords[displayName];
+            const recentGames = record.win + record.loss + record.draw;
             if (modeData && modeData.last){
                 const rating = modeData.last.rating;
                 const games = modeData.record ? (modeData.record.win + modeData.record.loss + modeData.record.draw) : 0;
                 setText(`${displayName}Rating`, rating);
-                setText(`${displayName}Games`, `${games} games`);
+                setText(`${displayName}Games`, `${recentGames} games`);
                 totalGames += games;
             } else{
                 setText(`${displayName}Rating`, 'N/A');
-                setText(`${displayName}Games`, '0 games');
+                setText(`${displayName}Games`, `${recentGames} games`);
             }
         });
         setText('totalGames', totalGames);
@@ -330,44 +437,148 @@ class ChessFairPlayAnalyzer{
     }
 
     calculateFairPlayScore(playerData, statsData, accuracies){
-        let score = 100;
-        const rapidRating = statsData.chess_rapid?.last?.rating || 0;
-        const blitzRating = statsData.chess_blitz?.last?.rating || 0;
-        const bulletRating = statsData.chess_bullet?.last?.rating || 0;
-        if (rapidRating > bulletRating + 300 || blitzRating > bulletRating + 300){
-            score -= 5;
-        }
-        const joinDate = new Date(playerData.joined * 1000);
-        const now = new Date();
-        const ageInDays = Math.floor((now - joinDate) / (1000 * 60 * 60 * 24));
-        const ageInMonths = ageInDays / 30;
-        if (ageInDays <= 20){
-            score -= 10;
-        } else if (ageInMonths <= 4){
-            score -= 5;
-        }
+        const reasons = [];
+        const notes = [];
+        const addReason = (label, points) =>{
+            const p = Math.round(points);
+            if (p > 0) reasons.push({ label, points: p });
+            return p;
+        };
+
         if (playerData.status && playerData.status.includes('closed:fair_play_violations')){
-            score = 0;
+            addReason('Account closed for fair play violations', 100);
+            return{ score: 0, reasons, notes };
         }
-        const modes = ['chess_rapid', 'chess_blitz'];
-        modes.forEach(mode =>{
-            const modeData = statsData[mode];
-            if (modeData && modeData.record){
-                const { win, loss, draw } = modeData.record;
-                const totalGames = win + loss + draw;
-                if (totalGames > 0){
-                    const winRate = (win / totalGames) * 100;
-                    if (winRate >= 70) score -= 10;
-                    else if (winRate >= 60) score -= 5;
-                }
+
+        const ratings = {};
+        const gamesCount = {};
+        const winRates = {};
+        const recentGames = {};
+        MODES.forEach(mode =>{
+            const modeData = statsData[`chess_${mode}`];
+            ratings[mode] = modeData?.last?.rating || 0;
+            const record = modeData?.record;
+            gamesCount[mode] = record ? (record.win + record.loss + record.draw) : 0;
+            const recent = accuracies.modeRecords[mode];
+            recentGames[mode] = recent.win + recent.loss + recent.draw;
+            winRates[mode] = recentGames[mode] > 0 ? (recent.win / recentGames[mode]) * 100 : 0;
+        });
+        const totalGames = MODES.reduce((sum, mode) => sum + gamesCount[mode], 0);
+        const maxRating = Math.max(ratings.rapid, ratings.blitz, ratings.bullet);
+        let totalRisk = 0;
+        let accuracyRisk = 0;
+        let accuracyLabel = '';
+        let strongModes = 0;
+        let totalAccuracyGames = 0;
+        MODES.forEach(mode =>{
+            const count = accuracies[`${mode}Count`];
+            const avg = accuracies[`${mode}Avg`];
+            totalAccuracyGames += count;
+            if (avg === null || count < MIN_ACCURACY_GAMES) return;
+            const risk = this.pickRisk(avg, ACCURACY_STEPS[mode]);
+            if (risk >= 12) strongModes++;
+            if (risk > accuracyRisk){
+                accuracyRisk = risk;
+                accuracyLabel = `High ${MODE_LABELS[mode]} accuracy (${avg.toFixed(1)}%)`;
             }
         });
-        const realAccuracies = [accuracies.rapidAvg, accuracies.blitzAvg, accuracies.bulletAvg].filter(a => a !== null);
-        if (realAccuracies.length > 0){
-            const avgAccuracy = realAccuracies.reduce((a, b) => a + b, 0) / realAccuracies.length;
-            if (avgAccuracy > 90) score -= 15;
+        if (strongModes >= 2){
+            accuracyRisk = Math.min(25, accuracyRisk + 3);
+            accuracyLabel += ' in multiple modes';
         }
-        return Math.max(0, Math.min(100, Math.round(score)));
+        if (totalAccuracyGames < MIN_ACCURACY_GAMES){
+            notes.push('Not enough games with accuracy data - accuracy signals skipped.');
+        }
+        totalRisk += addReason(accuracyLabel, accuracyRisk);
+        let varianceRisk = 0;
+        let varianceLabel = '';
+        let highShareRisk = 0;
+        let highShareLabel = '';
+        MODES.forEach(mode =>{
+            const count = accuracies[`${mode}Count`];
+            const avg = accuracies[`${mode}Avg`];
+            const stats = accuracies.accuracyStats[mode];
+            if (avg === null || count < MIN_VARIANCE_GAMES) return;
+            if (stats.std !== null && avg >= MIN_AVG_FOR_VARIANCE[mode]){
+                let risk = 0;
+                if (stats.std < 5) risk = 15;
+                else if (stats.std < 7) risk = 10;
+                else if (stats.std < 9) risk = 5;
+                if (risk > varianceRisk){
+                    varianceRisk = risk;
+                    varianceLabel = `Very consistent ${MODE_LABELS[mode]} accuracy (std ${stats.std.toFixed(1)})`;
+                }
+            }
+            const shareRisk = this.pickRisk(stats.highShare, [[0.35, 10], [0.25, 7], [0.15, 4]]);
+            if (shareRisk > highShareRisk){
+                highShareRisk = shareRisk;
+                highShareLabel = `${Math.round(stats.highShare * 100)}% of ${MODE_LABELS[mode]} games at ${HIGH_ACCURACY_LINE}%+ accuracy`;
+            }
+        });
+        totalRisk += addReason(varianceLabel, varianceRisk);
+        totalRisk += addReason(highShareLabel, highShareRisk);
+        let winRateRisk = 0;
+        let winRateLabel = '';
+        MODES.forEach(mode =>{
+            if (recentGames[mode] < MIN_WINRATE_GAMES) return;
+            const risk = this.pickRisk(winRates[mode], [[75, 10], [70, 7], [65, 4]]);
+            if (risk > winRateRisk){
+                winRateRisk = risk;
+                winRateLabel = `High ${MODE_LABELS[mode]} win rate (${winRates[mode].toFixed(0)}%, 12 months)`;
+            }
+        });
+        if (accuracyRisk === 0) winRateRisk *= 0.5;
+        totalRisk += addReason(winRateLabel, winRateRisk);
+        const streaks = accuracies.winStreaks || {};
+        const bestStreak = Math.max(streaks.rapid || 0, streaks.blitz || 0);
+        let streakRisk = this.pickRisk(bestStreak, [[25, 8], [18, 5], [12, 3]]);
+        if (accuracyRisk < 5) streakRisk *= 0.4;
+        totalRisk += addReason(`Long win streak (${bestStreak} wins)`, streakRisk);
+        let jumpGain = 0;
+        let jumpMode = '';
+        MODES.forEach(mode =>{
+            const series = this.buildDailyRatingSeries(accuracies.ratingHistory[mode]);
+            const gain = this.calculateRatingJump(series);
+            if (gain > jumpGain){
+                jumpGain = gain;
+                jumpMode = MODE_LABELS[mode];
+            }
+        });
+        let jumpRisk = this.pickRisk(jumpGain, [[400, 12], [300, 8], [200, 4]]);
+        if (accuracyRisk < 5) jumpRisk *= 0.5;
+        totalRisk += addReason(`Sudden ${jumpMode} rating jump (+${jumpGain} in 30 days)`, jumpRisk);
+        const joinDate = new Date(playerData.joined * 1000);
+        const ageInDays = Math.floor((new Date() - joinDate) / (1000 * 60 * 60 * 24));
+        let ageRisk = 0;
+        if (totalGames >= 20){
+            if (ageInDays <= 60 && maxRating >= 1800) ageRisk = 8;
+            else if (ageInDays <= 90 && maxRating >= 1500) ageRisk = 5;
+            else if (ageInDays <= 20) ageRisk = 2;
+        }
+        totalRisk += addReason(`New account (${ageInDays} days) with ${maxRating} rating`, ageRisk);
+        let disparityRisk = 0;
+        if (ratings.bullet > 0 && gamesCount.bullet >= MIN_MODE_GAMES){
+            const rapidGap = gamesCount.rapid >= MIN_MODE_GAMES && ratings.rapid > ratings.bullet + 300;
+            const blitzGap = gamesCount.blitz >= MIN_MODE_GAMES && ratings.blitz > ratings.bullet + 300;
+            if (rapidGap || blitzGap) disparityRisk = 4;
+        }
+        totalRisk += addReason('Large rating gap between game modes', disparityRisk);
+        const strong = accuracies.strongGames || [];
+        let strongRisk = 0;
+        let strongLabel = '';
+        if (strong.length >= MIN_STRONG_GAMES){
+            const wins = strong.filter(g => g.win).length;
+            const strongWinRate = (wins / strong.length) * 100;
+            const accList = strong.filter(g => g.accuracy !== null).map(g => g.accuracy);
+            const strongAvgAcc = accList.length ? accList.reduce((a, b) => a + b, 0) / accList.length : null;
+            strongRisk = this.pickRisk(strongWinRate, [[70, 8], [60, 5], [50, 3]]);
+            if (strongAvgAcc === null || strongAvgAcc < 85) strongRisk *= 0.5;
+            strongLabel = `${strongWinRate.toFixed(0)}% win rate vs much stronger opponents`;
+        }
+        totalRisk += addReason(strongLabel, strongRisk);
+
+        const score = Math.max(0, Math.min(100, Math.round(100 - totalRisk)));
+        return{ score, reasons, notes };
     }
 
     displayFairPlayScore(score){
@@ -385,23 +596,32 @@ class ChessFairPlayAnalyzer{
         }
     }
 
-    createWinRateChart(statsData){
+    displayReasons(result){
+        let html = '';
+        if (result.reasons.length === 0){
+            html += '<div class="reason-item"><span class="reason-label">No suspicious signals detected</span><span class="reason-points ok">0</span></div>';
+        }
+        result.reasons.forEach(r =>{
+            html += `<div class="reason-item"><span class="reason-label">${r.label}</span><span class="reason-points">-${r.points}</span></div>`;
+        });
+        result.notes.forEach(n =>{
+            html += `<div class="reason-note">${n}</div>`;
+        });
+        setHTML('reasonsList', html);
+    }
+
+    createWinRateChart(modeRecords){
         const canvas = $('winRateChart');
         if (!canvas || typeof Chart === 'undefined') return;
         const ctx = canvas.getContext('2d');
-        const modes = ['chess_rapid', 'chess_blitz', 'chess_bullet'];
+        const modes = ['rapid', 'blitz', 'bullet'];
         const labels = ['Rapid', 'Blitz', 'Bullet'];
         const winRates = [];
         const colors = ['#667EEA', '#764BA2', '#F093FB'];
         modes.forEach(mode =>{
-            const modeData = statsData[mode];
-            if (modeData && modeData.record){
-                const { win, loss, draw } = modeData.record;
-                const total = win + loss + draw;
-                winRates.push(total > 0 ? Math.round((win / total) * 100) : 0);
-            } else{
-                winRates.push(0);
-            }
+            const { win, loss, draw } = modeRecords[mode];
+            const total = win + loss + draw;
+            winRates.push(total > 0 ? Math.round((win / total) * 100) : 0);
         });
         if (this.chartInstance){
             this.chartInstance.destroy();
